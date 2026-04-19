@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Disco PNG Party</title>
+  <style>
+    :root {
+      --disco-speed: 1s;
+      --party-flash-speed: 1.08s;
+      --party-pulse-brightness: 1;
+      --party-flash-strength: .5;
+    }
+
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Arial Black', sans-serif;
+    }
+
+    /* Animierter Disco-Hintergrund */
+    #disco-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      background: radial-gradient(circle, #ea5eff, #00ffff, #ff0000, #ffff00);
+      background-size: 400% 400%;
+      animation: discoGradient 5s ease infinite, partyPulse var(--party-flash-speed) linear infinite;
+    }
+
+    #disco-bg::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      mix-blend-mode: screen;
+      background:
+        radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 45%),
+        radial-gradient(circle at 75% 35%, rgba(255, 0, 255, 0.9), rgba(255, 0, 255, 0) 40%),
+        radial-gradient(circle at 30% 75%, rgba(0, 255, 255, 0.9), rgba(0, 255, 255, 0) 40%),
+        radial-gradient(circle at 80% 80%, rgba(255, 255, 0, 0.9), rgba(255, 255, 0, 0) 45%);
+      opacity: 0;
+      animation: partyFlash var(--party-flash-speed) steps(1, end) infinite;
+    }
+
+    @keyframes discoGradient {
+      0% {
+        background-position: 0% 50%;
+      }
+      50% {
+        background-position: 100% 50%;
+      }
+      100% {
+        background-position: 0% 50%;
+      }
+    }
+
+    @keyframes partyPulse {
+      0%, 100% {
+        filter: brightness(var(--party-pulse-brightness)) saturate(1.6) contrast(1.15);
+      }
+      25% {
+        filter: brightness(0.78) saturate(0.95) contrast(1);
+      }
+      50% {
+        filter: brightness(var(--party-pulse-brightness)) saturate(1.7) contrast(1.2);
+      }
+      75% {
+        filter: brightness(0.72) saturate(0.9) contrast(0.95);
+      }
+    }
+
+    @keyframes partyFlash {
+      0% {
+        opacity: var(--party-flash-strength);
+      }
+      8% {
+        opacity: 0.22;
+      }
+      100% {
+        opacity: 0;
+      }
+    }
+
+    /* Ladebildschirm */
+    #loader {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #111;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      color: white;
+    }
+
+    #progress-container {
+      width: 70%;
+      height: 20px;
+      background: #333;
+      border-radius: 10px;
+      margin-top: 20px;
+    }
+
+    #progress-bar {
+      width: 0%;
+      height: 100%;
+      background: #00ff00;
+      border-radius: 10px;
+      transition: width 0.3s;
+    }
+
+    /* Fliegende Elemente */
+    .flying-item {
+      position: absolute;
+      pointer-events: none;
+      user-select: none;
+      will-change: transform;
+      z-index: 10;
+    }
+
+    .jaaaa-text {
+      color: white;
+      text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5);
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+    /* Start-Overlay */
+    #start-hint {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 10px 20px;
+      border-radius: 20px;
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+
+<div id="disco-bg"></div>
+
+<div id="loader">
+  <h2>Lade Party-Modus...</h2>
+  <div id="progress-container">
+    <div id="progress-bar"></div>
+  </div>
+</div>
+
+<div id="start-hint">Klicken für Sound 🔊</div>
+
+<audio id="bg-music" loop></audio>
+
+<script>
+    const totalFiles = 9; // 11 PNGs + 1 MP3
+    let loadedCount = 0;
+    const progressBar = document.getElementById('progress-bar');
+    const loader = document.getElementById('loader');
+    const music = document.getElementById('bg-music');
+
+    let activeElements = 0;
+    const maxActive = 5;
+    const MOBILE_BREAKPOINT = 768;
+    const SAFE_MARGIN = 0;
+    const SPAWN_INTERVAL_MS = 2500;
+
+    function randomBetween(min, max) {
+        return Math.random() * (max - min) + min;
+    }
+
+    function clamp(value, min, max) {
+        return Math.min(max, Math.max(min, value));
+    }
+
+    function getImageSizeRange() {
+        const viewportMin = Math.min(window.innerWidth, window.innerHeight);
+        const isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
+        const minSize = Math.max(100, viewportMin * (isMobile ? 0.7 : 0.6));
+        const maxSize = Math.max(minSize + 20, viewportMin * (isMobile ? 0.3 : 0.3));
+        return {minSize, maxSize, isMobile};
+    }
+
+    function getEdgeSpawnPoint(minX, maxX, minY, maxY) {
+        const edge = ['top', 'left', 'right'][Math.floor(Math.random() * 3)];
+
+        if (edge === 'top') {
+            return {x: randomBetween(minX, maxX), y: minY};
+        }
+
+        if (edge === 'left') {
+            return {x: minX, y: randomBetween(minY, maxY)};
+        }
+
+        return {x: maxX, y: randomBetween(minY, maxY)};
+    }
+
+    function getFarTargetPoint(minX, maxX, minY, maxY, startX, startY) {
+        const minDistance = Math.min(window.innerWidth, window.innerHeight) * 0.25;
+        let targetX = randomBetween(minX, maxX);
+        let targetY = randomBetween(minY, maxY);
+
+        for (let i = 0; i < 6; i++) {
+            const dx = targetX - startX;
+            const dy = targetY - startY;
+            if (Math.hypot(dx, dy) >= minDistance) {
+                break;
+            }
+            targetX = randomBetween(minX, maxX);
+            targetY = randomBetween(minY, maxY);
+        }
+
+        return {x: targetX, y: targetY};
+    }
+
+    // 1. Assets laden
+    function assetLoaded() {
+        loadedCount++;
+        const percent = (loadedCount / totalFiles) * 100;
+        progressBar.style.width = percent + '%';
+        if (loadedCount >= totalFiles) {
+            setTimeout(() => {
+                loader.style.display = 'none';
+                startAnimationLoop();
+            }, 500);
+        }
+    }
+
+    // MP3 Handling
+    music.src = 'music.mp3'; // Deine Datei
+    music.oncanplaythrough = assetLoaded;
+
+    // PNGs vorladen
+    const pngs = [];
+    for (let i = 1; i <= 8; i++) {
+        const img = new Image();
+        img.src = `${i}.png`;
+        img.onload = assetLoaded;
+        img.onerror = assetLoaded; // Falls Datei fehlt, trotzdem weitermachen
+        pngs.push(img.src);
+    }
+
+    let pngPool = [];
+    const activePngIndices = new Set();
+
+    function refillPngPool() {
+        pngPool = [...Array(pngs.length).keys()]
+            .filter((index) => !activePngIndices.has(index));
+
+        for (let i = pngPool.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [pngPool[i], pngPool[j]] = [pngPool[j], pngPool[i]];
+        }
+    }
+
+    function pickUniquePngIndex() {
+        if (!pngPool.length) {
+            refillPngPool();
+        }
+
+        if (!pngPool.length) {
+            return null;
+        }
+
+        const index = pngPool.pop();
+        activePngIndices.add(index);
+        return index;
+    }
+
+    function releasePngIndex(index) {
+        if (typeof index === 'number') {
+            activePngIndices.delete(index);
+        }
+    }
+
+    // 2. Animations-Logik
+    function createFlyingElement() {
+        if (activeElements >= maxActive) return;
+        activeElements++;
+
+        const {minSize, maxSize, isMobile} = getImageSizeRange();
+        const isText = Math.random() > 0.8;
+        const element = document.createElement(isText ? 'div' : 'img');
+
+        if (isText) {
+            const as = "a".repeat(Math.floor(Math.random() * 10) + 1);
+            element.innerText = "J" + as;
+            element.className = 'flying-item jaaaa-text';
+            element.style.fontSize = (Math.random() * 30 + 20) + 'px';
+        } else {
+            const pngIndex = pickUniquePngIndex();
+            if (pngIndex === null) {
+                activeElements--;
+                return;
+            }
+            element.dataset.pngIndex = String(pngIndex);
+            element.src = pngs[pngIndex];
+            element.className = 'flying-item';
+            element.style.objectFit = 'contain';
+        }
+
+        document.body.appendChild(element);
+
+        const duration = randomBetween(3000, 5000);
+        const startSize = isText ? randomBetween(50, 100) : randomBetween(minSize, maxSize);
+        const endSize = isText ? randomBetween(100, 250) : randomBetween(minSize, maxSize);
+
+        const maxElementSize = Math.max(startSize, endSize);
+        const minX = SAFE_MARGIN;
+        const maxX = Math.max(minX, window.innerWidth - maxElementSize - SAFE_MARGIN);
+        const minY = SAFE_MARGIN;
+        const maxY = Math.max(minY, window.innerHeight - maxElementSize - SAFE_MARGIN);
+
+        const startPoint = getEdgeSpawnPoint(minX, maxX, minY, maxY);
+        const endPoint = getFarTargetPoint(minX, maxX, minY, maxY, startPoint.x, startPoint.y);
+
+        const startX = startPoint.x;
+        const startY = startPoint.y;
+        const endX = endPoint.x;
+        const endY = endPoint.y;
+
+        const waveAmplitude = isText ? 50 : (isMobile ? 24 : 40);
+        const zigzagAmplitude = isText ? 100 : (isMobile ? 45 : 75);
+        const pathType = Math.floor(Math.random() * 3); // 0: Gerade, 1: Welle, 2: Zickzack
+        const startTime = performance.now();
+
+        function animate(currentTime) {
+            const elapsed = currentTime - startTime;
+            const progress = elapsed / duration;
+
+            if (progress < 1) {
+                let currentY = startY + (endY - startY) * progress;
+                let currentX = startX + (endX - startX) * progress;
+
+                if (pathType === 1) {
+                    currentX += Math.sin(progress * 10) * waveAmplitude;
+                } else if (pathType === 2) {
+                    currentX += Math.cos(progress * 5) * zigzagAmplitude;
+                }
+
+                const currentSize = startSize + (endSize - startSize) * progress;
+
+                if (!isText) {
+                    element.style.width = `${currentSize}px`;
+                    element.style.height = `${currentSize}px`;
+                    currentX = clamp(currentX, SAFE_MARGIN, window.innerWidth - currentSize - SAFE_MARGIN);
+                    currentY = clamp(currentY, SAFE_MARGIN, window.innerHeight - currentSize - SAFE_MARGIN);
+                    element.style.transform = `translate(${currentX}px, ${currentY}px)`;
+                } else {
+                    element.style.transform = `translate(${currentX}px, ${currentY}px) scale(${currentSize / 100})`;
+                }
+
+                element.style.opacity = 1 - Math.pow(progress, 4); // Sanftes Ausblenden am Ende
+
+                requestAnimationFrame(animate);
+            } else {
+                releasePngIndex(Number(element.dataset.pngIndex));
+                element.remove();
+                activeElements--;
+            }
+        }
+
+        requestAnimationFrame(animate);
+    }
+
+    function startAnimationLoop() {
+        setInterval(() => {
+            if (activeElements < maxActive) {
+                createFlyingElement();
+            }
+        }, SPAWN_INTERVAL_MS);
+    }
+
+    let musicPlaying = false;
+    // Musik-Start bei Klick
+    window.addEventListener('click', () => {
+        if (!musicPlaying) {
+            music.play();
+            musicPlaying = true;
+        }
+
+        document.getElementById('start-hint').style.display = 'none';
+    });
+
+</script>
+</body>
+</html>
