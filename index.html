@@ -173,10 +173,10 @@
     const music = document.getElementById('bg-music');
 
     let activeElements = 0;
-    const maxActive = 5;
+    const maxActive = 7;
     const MOBILE_BREAKPOINT = 768;
     const SAFE_MARGIN = 0;
-    const SPAWN_INTERVAL_MS = 2500;
+    const SPAWN_INTERVAL_MS = 2000;
 
     function randomBetween(min, max) {
         return Math.random() * (max - min) + min;
@@ -292,7 +292,7 @@
         activeElements++;
 
         const {minSize, maxSize, isMobile} = getImageSizeRange();
-        const isText = Math.random() > 0.8;
+        const isText = Math.random() > 0.75;
         const element = document.createElement(isText ? 'div' : 'img');
 
         if (isText) {
@@ -363,7 +363,7 @@
                     element.style.transform = `translate(${currentX}px, ${currentY}px) scale(${currentSize / 100})`;
                 }
 
-                element.style.opacity = 1 - Math.pow(progress, 4); // Sanftes Ausblenden am Ende
+                element.style.opacity = 1 - Math.pow(progress, 9); // Sanftes Ausblenden am Ende
 
                 requestAnimationFrame(animate);
             } else {
